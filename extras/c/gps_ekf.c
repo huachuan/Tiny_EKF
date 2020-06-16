@@ -23,13 +23,14 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <math.h>
-
-#include "tinyekf_config.h"
+#include <gpsdata.h>
+//#include "tinyekf_config.h"
 #include "tiny_ekf.h"
 
 // positioning interval
-static const double T = 1;
 
+//static const double T = 1;
+/**
 static void blkfill(ekf_t * ekf, const double * a, int off)
 {
     off *= 2;
@@ -40,7 +41,8 @@ static void blkfill(ekf_t * ekf, const double * a, int off)
     ekf->Q[off+1] [off+1] = a[3];
 }
 
-
+*/
+/*
 static void init(ekf_t * ekf)
 {
     // Set Q, see [1]
@@ -83,7 +85,8 @@ static void init(ekf_t * ekf)
     // clock drift
     ekf->x[7] = 4.549246345845814e+001;
 }
-
+*/
+/*
 static void model(ekf_t * ekf, double SV[4][3])
 { 
 
@@ -118,41 +121,35 @@ static void model(ekf_t * ekf, double SV[4][3])
         ekf->H[i][6] = 1;
     }   
 }
-
+*/
+/*
 static void readline(char * line, FILE * fp)
 {
     fgets(line, 1000, fp);
 }
-
-static void readdata(FILE * fp, double SV_Pos[4][3], double SV_Rho[4])
+*/
+/**
+static void readdata(int line, double SV_Pos[4][3], double SV_Rho[4])
 {
-    char line[1000];
-
-    readline(line, fp);
-
-    char * p = strtok(line, ",");
-
-    int i, j;
-
+    int i, j, itr = 0;
     for (i=0; i<4; ++i)
         for (j=0; j<3; ++j) {
-            SV_Pos[i][j] = atof(p);
-            p = strtok(NULL, ",");
+            SV_Pos[i][j] = input[line][itr++];
         }
 
     for (j=0; j<4; ++j) {
-        SV_Rho[j] = atof(p);
-        p = strtok(NULL, ",");
+        SV_Rho[j] = input[line][itr++];
     }
 }
-
+*/
+/**
 
 static void skipline(FILE * fp)
 {
     char line[1000];
     readline(line, fp);
 }
-
+*/
 void error(const char * msg)
 {
     fprintf(stderr, "%s\n", msg);
@@ -168,10 +165,10 @@ int main(int argc, char ** argv)
     init(&ekf);
 
     // Open input data file
-    FILE * ifp = fopen("gps.csv", "r");
+    //FILE * ifp = fopen("gps.csv", "r");
 
     // Skip CSV header
-    skipline(ifp);
+    //skipline(ifp);
 
     // Make a place to store the data from the file and the output of the EKF
     double SV_Pos[4][3];
@@ -180,15 +177,15 @@ int main(int argc, char ** argv)
 
     // Open output CSV file and write header
     const char * OUTFILE = "ekf.csv";
-    FILE * ofp = fopen(OUTFILE, "w");
-    fprintf(ofp, "X,Y,Z\n");
+    //FILE * ofp = fopen(OUTFILE, "w");
+    //fprintf(ofp,"X,Y,Z\n");
 
     int j, k;
 
     // Loop till no more data
     for (j=0; j<25; ++j) {
 
-        readdata(ifp, SV_Pos, SV_Rho);
+        readdata(j, SV_Pos, SV_Rho);
 
         model(&ekf, SV_Pos);
 
@@ -210,14 +207,14 @@ int main(int argc, char ** argv)
 
     // Dump filtered positions minus their means
     for (j=0; j<25; ++j) {
-        fprintf(ofp, "%f,%f,%f\n", 
-                Pos_KF[j][0]-mean_Pos_KF[0], Pos_KF[j][1]-mean_Pos_KF[1], Pos_KF[j][2]-mean_Pos_KF[2]);
+        //fprintf(ofp, "%f,%f,%f\n", 
+                //Pos_KF[j][0]-mean_Pos_KF[0], Pos_KF[j][1]-mean_Pos_KF[1], Pos_KF[j][2]-mean_Pos_KF[2]);
         printf("%f %f %f\n", Pos_KF[j][0], Pos_KF[j][1], Pos_KF[j][2]);
     }
     
     // Done!
-    fclose(ifp);
-    fclose(ofp);
+   // fclose(ifp);
+    //fclose(ofp);
     printf("Wrote file %s\n", OUTFILE);
     return 0;
 }
