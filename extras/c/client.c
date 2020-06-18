@@ -3,31 +3,34 @@
 #include <stdlib.h> 
 #include <string.h> 
 #include <sys/socket.h> 
+#include <gpsdata.h>
+#define MAX  30
 #define PORT 8080 
 #define SA struct sockaddr 
+static int itr = 0;
+static double pos[25][3];
 void 
 func(int sockfd) 
-{ 
-	double cout[3]={0.1,0.1,0.1};  
-	char   c[3][26];
-	char   s[3][26];
-	double sout[3];
+{  
+	char   data_line[16][MAX]; 
+	char   pos_line[3][MAX]; //x,y,z
 	for (;;) { 
-		printf("send the double array :\n "); 
+		//send data to server
 		int i;
-		for (i = 0; i < 3; i++) {
-			sprintf(c[i],"%.16f",cout[i]);
+		for (i = 0; i < 16; i++) {
+			sprintf(data_line[i],"%.16f", input[itr % 25][i]);
 		} 
-		write(sockfd, c, sizeof(c)); 
-		read(sockfd, s, sizeof(s)); 
+		write(sockfd, data_line, sizeof(data_line)); 
+		read(sockfd, pos_line, sizeof(pos_line)); 
 		printf("From Server received\n");
 		for (i = 0; i < 3; i++) {
-			sout[i] = atof(s[i]);
-			printf("%.16f",sout[i]);			
+			pos[itr % 25][i] = atof(pos_line[i]);
+			printf("%.16f",pos[itr % 25][i]);			
 		}
+		printf("\n");
+		itr++;
 	} 
 } 
-
 int 
 main() 
 { 
