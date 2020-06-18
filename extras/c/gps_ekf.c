@@ -23,15 +23,12 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <math.h>
-#include <gpsdata.h>
-//#include "tinyekf_config.h"
 #include "tiny_ekf.h"
-
+#include "tinyekf_config.h"
 // positioning interval
-
-//static const double T = 1;
-/**
-static void blkfill(ekf_t * ekf, const double * a, int off)
+const double T = 1;
+void 
+blkfill(ekf_t * ekf, const double * a, int off)
 {
     off *= 2;
 
@@ -41,9 +38,8 @@ static void blkfill(ekf_t * ekf, const double * a, int off)
     ekf->Q[off+1] [off+1] = a[3];
 }
 
-*/
-/*
-static void init(ekf_t * ekf)
+void 
+init(ekf_t * ekf)
 {
     // Set Q, see [1]
     const double Sf    = 36;
@@ -85,9 +81,9 @@ static void init(ekf_t * ekf)
     // clock drift
     ekf->x[7] = 4.549246345845814e+001;
 }
-*/
-/*
-static void model(ekf_t * ekf, double SV[4][3])
+
+void 
+model(ekf_t * ekf, double SV[4][3])
 { 
 
     int i, j;
@@ -121,100 +117,83 @@ static void model(ekf_t * ekf, double SV[4][3])
         ekf->H[i][6] = 1;
     }   
 }
-*/
-/*
-static void readline(char * line, FILE * fp)
-{
-    fgets(line, 1000, fp);
-}
-*/
-/**
-static void readdata(int line, double SV_Pos[4][3], double SV_Rho[4])
+
+void 
+readdata(double input[16], double SV_Pos[4][3], double SV_Rho[4])
 {
     int i, j, itr = 0;
     for (i=0; i<4; ++i)
         for (j=0; j<3; ++j) {
-            SV_Pos[i][j] = input[line][itr++];
+            SV_Pos[i][j] = input[itr++];
         }
 
     for (j=0; j<4; ++j) {
-        SV_Rho[j] = input[line][itr++];
+        SV_Rho[j] = input[itr++];
     }
 }
-*/
-/**
+static inline unsigned long long
+ps_tsc(void) {
+	unsigned long a, d, c;
 
-static void skipline(FILE * fp)
-{
-    char line[1000];
-    readline(line, fp);
-}
-*/
-void error(const char * msg)
-{
-    fprintf(stderr, "%s\n", msg);
+	__asm__ __volatile__("rdtsc" : "=a" (a), "=d" (d), "=c" (c) : :);
+
+	return ((unsigned long long)d << 32) | (unsigned long long)a;
 }
 
-int main(int argc, char ** argv)
+double *
+ekf(double data_input[25][16], int itr)
 {    
     // Do generic EKF initialization
     ekf_t ekf;
     ekf_init(&ekf, Nsta, Mobs);
-
+    static double Pos_dump[3];
     // Do local initialization
     init(&ekf);
 
-    // Open input data file
-    //FILE * ifp = fopen("gps.csv", "r");
-
     // Skip CSV header
-    //skipline(ifp);
 
     // Make a place to store the data from the file and the output of the EKF
-    double SV_Pos[4][3];
-    double SV_Rho[4];
-    double Pos_KF[25][3];
+    	double SV_Pos[4][3];
+    	double SV_Rho[4];
+    	double Pos_KF[25][3];
 
     // Open output CSV file and write header
-    const char * OUTFILE = "ekf.csv";
-    //FILE * ofp = fopen(OUTFILE, "w");
     //fprintf(ofp,"X,Y,Z\n");
 
-    int j, k;
+    	int j, k;
+	unsigned long long start, end;
 
+	start = ps_tsc();
     // Loop till no more data
-    for (j=0; j<25; ++j) {
+    	for (j=0; j<25; ++j) {
+		readdata(data_input[j], SV_Pos, SV_Rho);
 
-        readdata(j, SV_Pos, SV_Rho);
+       	 	model(&ekf, SV_Pos);
 
-        model(&ekf, SV_Pos);
-
-        ekf_step(&ekf, SV_Rho);
+        	ekf_step(&ekf, SV_Rho);
 
         // grab positions, ignoring velocities
-        for (k=0; k<3; ++k)
-            Pos_KF[j][k] = ekf.x[2*k];
-    }
+        	for (k=0; k<3; ++k)
+            		Pos_KF[j][k] = ekf.x[2*k];
+    	}
 
     // Compute means of filtered positions
-    double mean_Pos_KF[3] = {0, 0, 0};
-    for (j=0; j<25; ++j) 
-        for (k=0; k<3; ++k)
-            mean_Pos_KF[k] += Pos_KF[j][k];
-    for (k=0; k<3; ++k)
-        mean_Pos_KF[k] /= 25;
-
+    	double mean_Pos_KF[3] = {0, 0, 0};
+   	for (j=0; j<25; ++j) 
+        	for (k=0; k<3; ++k)
+            		mean_Pos_KF[k] += Pos_KF[j][k];
+    	for (k=0; k<3; ++k)
+        	mean_Pos_KF[k] /= 25;
 
     // Dump filtered positions minus their means
-    for (j=0; j<25; ++j) {
-        //fprintf(ofp, "%f,%f,%f\n", 
-                //Pos_KF[j][0]-mean_Pos_KF[0], Pos_KF[j][1]-mean_Pos_KF[1], Pos_KF[j][2]-mean_Pos_KF[2]);
-        printf("%f %f %f\n", Pos_KF[j][0], Pos_KF[j][1], Pos_KF[j][2]);
-    }
-    
-    // Done!
-   // fclose(ifp);
-    //fclose(ofp);
-    printf("Wrote file %s\n", OUTFILE);
-    return 0;
+   	//for (j=0; j<25; ++j) {
+        //printf("%f,%f,%f\n", Pos_KF[j][0]-mean_Pos_KF[0], Pos_KF[j][1]-mean_Pos_KF[1], Pos_KF[j][2]-mean_Pos_KF[2]);
+        Pos_dump[0] = Pos_KF[itr][0]-mean_Pos_KF[0];
+	Pos_dump[1] = Pos_KF[itr][1]-mean_Pos_KF[1];
+	Pos_dump[2] = Pos_KF[itr][2]-mean_Pos_KF[2];
+        //printf("%f %f %f\n", Pos_KF[j][0], Pos_KF[j][1], Pos_KF[j][2]);
+    	//}
+	end = ps_tsc();
+	printf("cycles per 100000 loop: %llu, %llu\n", (end-start), (end-start)/25);
+    	return Pos_dump;
 }
