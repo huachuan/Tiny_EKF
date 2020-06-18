@@ -87,6 +87,6 @@ main(int argc, char ** argv)
         //printf("%f %f %f\n", Pos_KF[j][0], Pos_KF[j][1], Pos_KF[j][2]);
     //}
 	end = ps_tsc();
-	printf("cycles per 100000 loop: %llu, %llu\n", (end-start), (end-start)/25);
+	
     return 0;
 }
