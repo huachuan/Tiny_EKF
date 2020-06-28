@@ -3,12 +3,15 @@
 #include <stdlib.h> 
 #include <string.h> 
 #include <sys/socket.h> 
+#include <arpa/inet.h>
+#include <unistd.h> 
 #include <gpsdata.h>
 #define MAX  30
 #define PORT 8080 
 #define SA struct sockaddr 
 static int itr = 0;
 static double pos[25][3];
+/*
 void 
 func(int sockfd) 
 {  
@@ -20,8 +23,8 @@ func(int sockfd)
 		for (i = 0; i < 16; i++) {
 			sprintf(data_line[i],"%.16f", input[itr % 25][i]);
 		} 
-		write(sockfd, data_line, sizeof(data_line)); 
-		read(sockfd, pos_line, sizeof(pos_line)); 
+		sendto(sockfd, data_line, sizeof(data_line), 0, (const struct sockaddr *) &servaddr, sizeof(servaddr)); 
+		recvfrom(sockfd, pos_line, sizeof(pos_line)); 
 		printf("From Server received\n");
 		for (i = 0; i < 3; i++) {
 			pos[itr % 25][i] = atof(pos_line[i]);
@@ -30,7 +33,7 @@ func(int sockfd)
 		printf("\n");
 		itr++;
 	} 
-} 
+} */
 int 
 main() 
 { 
@@ -61,7 +64,27 @@ main()
 		printf("connected to the server..\n"); 
 
 	// function for chat 
-	func(sockfd); 
+	/*func(sockfd); */
+	char   data_line[16][MAX]; 
+	char   pos_line[3][MAX]; //x,y,z
+	while (1) { 
+		//send data to server
+		int i;
+		for (i = 0; i < 16; i++) {
+			sprintf(data_line[i],"%.16f", input[itr % 25][i]);
+		} 
+		sendto(sockfd, data_line, sizeof(data_line), 0, (const struct sockaddr *) &servaddr, sizeof(servaddr)); 
+		int len;
+		len = sizeof(servaddr);
+		recvfrom(sockfd, pos_line, sizeof(pos_line), 0, (struct sockaddr *) &servaddr, &len); 
+		printf("From Server received\n");
+		for (i = 0; i < 3; i++) {
+			pos[itr % 25][i] = atof(pos_line[i]);
+			printf("%.16f",pos[itr % 25][i]);			
+		}
+		printf("\n");
+		itr++;
+	} 
 
 	// close the socket 
 	close(sockfd); 

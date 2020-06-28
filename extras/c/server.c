@@ -5,6 +5,8 @@
 #include <string.h> 
 #include <sys/socket.h> 
 #include <sys/types.h>  
+#include <arpa/inet.h>
+#include <unistd.h> 
 #define PORT 8080 
 #define MAX  30
 #define SA struct sockaddr   
@@ -12,6 +14,7 @@
 static double data_input[25][16];
 static int itr = 0;
 extern double * ekf(double data_input[25][16], int itr);
+/*
 void 
 func(int sockfd) 
 {  
@@ -20,7 +23,7 @@ func(int sockfd)
 	char   sout[3][MAX];
 	for (;;) { 
 		int i;
-        	read(sockfd, data_line, sizeof(data_line)); 
+        	recvfrom(sockfd, data_line, sizeof(data_line), 0, (struct sockaddr *) &cli, &len); 
 		for (i = 0; i < 16; i++) {
 			data_input[itr % 25][i] = atof(data_line[i]);
 			printf("%.16f",data_input[itr % 25][i]);			
@@ -29,12 +32,12 @@ func(int sockfd)
 		for (i = 0; i < 3; i++) {
 			sprintf(sout[i],"%.16f", pos[i]);
 		} 
-		write(sockfd, sout, sizeof(sout));
+		sendto(sockfd, sout, sizeof(sout), 0, (const struct sockaddr *) &cli, len);
 		printf("\n\n");
         	itr++; 
     	}
 } 
-  
+ */
 // Driver function 
 int 
 main() 
@@ -43,7 +46,7 @@ main()
     	struct sockaddr_in servaddr, cli; 
   
     	// socket create and verification 
-    	sockfd = socket(AF_INET, SOCK_STREAM, 0); 
+    	sockfd = socket(AF_INET, SOCK_DGRAM, 0); 
     	if (sockfd == -1) { 
         	printf("socket creation failed...\n"); 
         	exit(0); 
@@ -83,7 +86,25 @@ main()
         	printf("server acccept the client...\n"); 
 	}
   	// Function for chatting between client and server 
-    	func(connfd); 
+    	/*func(connfd); */
+	char   data_line[16][MAX];
+	double * pos;
+	char   sout[3][MAX];
+	while (1) { 
+		int i;
+        	recvfrom(sockfd, data_line, sizeof(data_line), 0, (struct sockaddr *) &cli, &len); 
+		for (i = 0; i < 16; i++) {
+			data_input[itr % 25][i] = atof(data_line[i]);
+			printf("%.16f",data_input[itr % 25][i]);			
+		}
+		pos = ekf(data_input, itr % 25);
+		for (i = 0; i < 3; i++) {
+			sprintf(sout[i],"%.16f", pos[i]);
+		} 
+		sendto(sockfd, sout, sizeof(sout), 0, (const struct sockaddr *) &cli, len);
+		printf("\n\n");
+        	itr++; 
+    	}
   	//After chatting close the socket 
     	close(sockfd); 
 	return 0;
