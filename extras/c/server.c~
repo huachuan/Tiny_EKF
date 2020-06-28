@@ -9,9 +9,9 @@
 #define PORT 8080 
 #define MAX  30
 #define SA struct sockaddr   
-static double data_input[25][16];
+static double data_input[2][16];
 static int itr = 0;
-extern double * ekf(double data_input[25][16], int itr);
+extern double * ekf(double data_input[2][16], int itr);
 int 
 main() 
 { 
@@ -46,10 +46,10 @@ main()
 		int i;
         	recvfrom(sockfd, data_line, sizeof(data_line), 0, (SA*)&cli, &len); 
 		for (i = 0; i < 16; i++) {
-			data_input[itr % 25][i] = atof(data_line[i]);
-			printf("%.16f",data_input[itr % 25][i]);			
+			data_input[itr % 2][i] = atof(data_line[i]);
+			printf("%.16f",data_input[itr % 2][i]);			
 		}
-		pos = ekf(data_input, itr % 25);
+		pos = ekf(data_input, itr % 2);
 		for (i = 0; i < 3; i++) {
 			sprintf(sout[i],"%.16f", pos[i]);
 		} 
