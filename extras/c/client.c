@@ -6,11 +6,11 @@
 #include <arpa/inet.h>
 #include <netinet/in.h> 
 #include <gpsdata.h>
-#define MAX  30
+#define MAX  32
 #define PORT 8080 
 #define SA struct sockaddr 
 static int itr = 0;
-static double pos[2][3];
+static double pos[3];
 
 int 
 main() 
@@ -43,10 +43,10 @@ main()
 		int len;
 		len = sizeof(servaddr);
 		recvfrom(sockfd, pos_line, sizeof(pos_line), 0, (SA*) &servaddr, &len); 
-		printf("From Server received\n");
+		printf("From Server received position\n");
 		for (i = 0; i < 3; i++) {
-			pos[itr % 2][i] = atof(pos_line[i]);
-			printf("%.16f",pos[itr % 2][i]);			
+			pos[i] = atof(pos_line[i]);
+			printf("%f,", pos[i]);			
 		}
 		printf("\n");
 		itr++;
