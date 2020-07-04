@@ -10,18 +10,14 @@
 #define MAX  32
 #define BACKLOG 5
 #define PORT 8080
-#define PIDNUMB 2
+#define PIDNUMB 80
 #define SA struct sockaddr   
 static double data_input[16];
 static ekf_t ekf;
 extern void init(ekf_t * ekf);
 extern double * ekf_fn(ekf_t * ekf, double data_input[16]);
 extern void ekf_init(ekf_t * ekf, int n, int m);
-void
-sig_int(int num) 
-{
-	exit(1);
-}
+
 static void
 handle_connect(int sockfd)
 {
@@ -52,9 +48,8 @@ handle_connect(int sockfd)
 int 
 main() 
 { 
-	int sockfd; 
+	int sockfd, len; 
 	struct sockaddr_in servaddr, cli; 
-	//signal(SIGINT, sig_int);
     	sockfd = socket(AF_INET, SOCK_DGRAM, 0); 
     	if (sockfd < 0) { 
         	printf("socket creation failed...\n"); 
@@ -76,16 +71,72 @@ main()
     	} else {
         	printf("Socket successfully binded..\n"); 
 	}
-	
-  	pid_t pid[PIDNUMB];
-	int   i = 0;
-	for (i = 0; i < PIDNUMB; i++) {
-		pid[i] = fork();
-		if (pid[i] == 0) {
-			handle_connect(sockfd);	
-		}	
+	pid_t pid[PIDNUMB];
+	char buff[MAX];
+	int  i_cli = 0, new_port;
+	int  byte_read;
+	len = sizeof(cli);
+	while(1) {
+		printf("UDP server: waiting for connection\n");
+		bzero(buff, MAX);
+		byte_read = recvfrom(sockfd, (char *)buff, MAX, MSG_WAITALL, (SA *)&cli, &len);
+		buff[byte_read] = '\0';
+		printf("%s \n", buff);
+		if (byte_read > 0) {
+			i_cli++;
+			new_port = PORT + i_cli;
+			printf("received new, please sign a port to client\n");
+			bzero(buff, MAX);
+			sprintf(buff, "%d", new_port);
+			printf("port number %s\n", buff);
+			sendto(sockfd, (char *)buff, sizeof(buff), 0, (SA *)&cli, len);
+			pid[i_cli] = fork();
+			if (pid[i_cli] == 0) {
+				struct sockaddr_in childsaddr; 
+				int childfd = socket(AF_INET, SOCK_DGRAM, 0); 
+	    			if (childfd < 0) { 
+					printf("child socket creation failed...\n"); 
+					exit(0); 
+	    			} else {
+					printf("child socket successfully created..\n"); 
+				}
+
+				memset(&childsaddr, 0, sizeof(childsaddr)); 
+	    			childsaddr.sin_family = AF_INET; 
+	    			childsaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
+	    			childsaddr.sin_port = htons(new_port); 
+	    			if ((bind(childfd, (SA*)&childsaddr, sizeof(childsaddr))) < 0) { 
+					printf("socket bind failed...\n"); 
+					exit(0); 
+	    			} else {
+					printf("Socket successfully binded for client #%d\n", i_cli); 
+				}
+				//handle_connect(childfd);	
+				printf("UDP server: receive use new port\n");
+				len = sizeof(cli); 
+				char   data_line[16][MAX];
+				double * pos;
+				char   sout[3][MAX];
+				ekf_init(&ekf, Nsta, Mobs);
+				init(&ekf);
+					//while (1) { 
+				int i;
+				byte_read = recvfrom(childfd, data_line, sizeof(data_line), MSG_WAITALL, (SA *)&cli, &len); 
+				printf("received byte_read = %d \n", byte_read);
+				for (i = 0; i < 16; i++) {
+					data_input[i] = atof(data_line[i]);			
+				}
+				pos = ekf_fn(&ekf, data_input);
+				for (i = 0; i < 3; i++) {
+					sprintf(sout[i],"%f", pos[i]);
+				} 
+				sendto(childfd, sout, sizeof(sout), 0, (SA *)&cli, len);
+				printf("\n\n");
+    	//}
+			}	
+		}
 	}
- 	while(1);
+	close(sockfd);	
 	return 0;
 } 
 

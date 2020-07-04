@@ -15,9 +15,9 @@ static double pos[3];
 int 
 main() 
 { 
-	int sockfd; 
-	struct sockaddr_in servaddr, s2; 
-
+	int sockfd, newfd; 
+	struct sockaddr_in servaddr; 
+	char * message = "connection request from client";
 	sockfd = socket(AF_INET, SOCK_DGRAM, 0); 
 	if (sockfd < 0) { 
 		printf("socket creation failed...\n"); 
@@ -29,20 +29,45 @@ main()
 	memset(&servaddr, 0, sizeof(servaddr)); 
 
 	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr = INADDR_ANY;//inet_addr("127.0.0.1"); 
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);//inet_addr("127.0.0.1"); 
 	servaddr.sin_port = htons(PORT); 
-
+	int   byte_read = 0;
+	char buff[MAX];
+	sendto(sockfd, (const char *) message, strlen(message), MSG_CONFIRM, (SA*) &servaddr, sizeof(servaddr)); 
+	int lens;
+	lens = sizeof(servaddr);
+	bzero(buff, MAX);
+	byte_read = recvfrom(sockfd, (char *)buff, MAX, MSG_WAITALL, (SA*) &servaddr, &lens); 
+	buff[byte_read] = '\0';
+	int new_port = atoi(buff);
+	printf("use the assinged server port %d\n", new_port); 
 	char   data_line[16][MAX]; 
 	char   pos_line[3][MAX]; //x,y,z
-	while (1) { 
+//*****************
+	struct sockaddr_in newaddr; 
+	newfd = socket(AF_INET, SOCK_DGRAM, 0); 
+	if (newfd < 0) { 
+		printf("socket creation failed...\n"); 
+		exit(0); 
+	} 
+	else {
+		printf("Socket successfully created..\n"); 
+	}
+	memset(&newaddr, 0, sizeof(newaddr)); 
+
+	newaddr.sin_family = AF_INET; 
+	newaddr.sin_addr.s_addr = htonl(INADDR_ANY);//inet_addr("127.0.0.1"); 
+	newaddr.sin_port = htons(new_port); 
+//*****************
+	//*while (1) { 
 		int i;
 		for (i = 0; i < 16; i++) {
 			sprintf(data_line[i],"%.16f", input[itr % 25][i]);
 		} 
-		sendto(sockfd, data_line, sizeof(data_line), 0, (SA*) &servaddr, sizeof(servaddr)); 
+		sendto(newfd, data_line, sizeof(data_line), 0, (SA*) &newaddr, sizeof(newaddr)); 
 		int len;
-		len = sizeof(servaddr);
-		recvfrom(sockfd, pos_line, sizeof(pos_line), 0, (SA*) &servaddr, &len); 
+		len = sizeof(newaddr);
+		recvfrom(newfd, pos_line, sizeof(pos_line), 0, (SA*) &newaddr, &len); 
 		printf("From Server received position\n");
 		for (i = 0; i < 3; i++) {
 			pos[i] = atof(pos_line[i]);
@@ -50,8 +75,7 @@ main()
 		}
 		printf("\n");
 		itr++;
-	} 
-
+	//} */
 	close(sockfd); 
 	return 0;
 } 
