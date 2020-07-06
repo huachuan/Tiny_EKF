@@ -194,9 +194,9 @@ ekf_fn(ekf_t * p_ekf, double data_input[16])
 	Pos_dump[2] = Pos_KF[itr][2]-mean_Pos_KF[2];
         printf("%f %f %f\n", Pos_KF[j][0], Pos_KF[j][1], Pos_KF[j][2]);
     	//}*/
-	printf("\n %f %f %f\n", Pos_KF[0], Pos_KF[1], Pos_KF[2]);
+	//printf("\n %f %f %f\n", Pos_KF[0], Pos_KF[1], Pos_KF[2]);
 	end = ps_tsc();
-	printf("cycles per 100000 loop: %llu\n", (end-start));
+	//printf("cycles per 100000 loop: %llu\n", (end-start));
     	//return Pos_dump;
 	return Pos_KF;
 }
