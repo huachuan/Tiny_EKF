@@ -6,12 +6,19 @@
 #include <arpa/inet.h>
 #include <netinet/in.h> 
 #include <unistd.h> 
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <sys/epoll.h>
+#include <sys/time.h>
+#include <sys/shm.h>
+#include <sys/resource.h>
 #include "tinyekf_config.h"
 #define MAX  32
 #define BACKLOG 5
 #define PORT 8080
-#define PIDNUMB 80
-#define SA struct sockaddr   
+#define PIDNUMB 100000
+#define SA struct sockaddr  
+#define MAXEPOLLSIZE 100 
 static double data_input[16];
 static ekf_t ekf;
 extern void init(ekf_t * ekf);
@@ -21,9 +28,9 @@ extern void ekf_init(ekf_t * ekf, int n, int m);
 void
 handle_connect(int sockfd)
 {
-	int len, byte_read; 
+/*	int len, byte_read; 
     	struct sockaddr_in cli; 	
-	len = sizeof(cli); 
+	len = sizeof(cli); */
 	char   data_line[16][MAX];
 	double * pos;
 	char   sout[3][MAX];
@@ -44,11 +51,57 @@ handle_connect(int sockfd)
     	}
 	close(sockfd);
 }
+void
+handle_data()
+{
+	char   data_line[16][MAX];
+	double * pos;
+	char   sout[3][MAX];
+	for (i = 0; i < 16; i++) {
+		data_input[i] = atof(data_line[i]);			
+	}
+	pos = ekf_fn(&ekf, data_input);
+	for (i = 0; i < 3; i++) {
+		sprintf(sout[i],"%f", pos[i]);
+	} 	
+	printf("\n\n");
+    	}
+}
+int 
+setnonblocking(int sockfd)
+{
+	if (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFD, 0)|O_NONBLOCK) == -1){
+    		return -1;
+  	}
+	return 0;
+}
+
 int 
 main() 
 { 
-	int sockfd, len; 
+	int sockfd, len, kdpfd, i, client; 
 	struct sockaddr_in servaddr, cli; 
+	int shmid;
+	int *shmaddr;
+	struct shmid_ds buf;
+	shmid = shmget(IPC_PRIVATE, 1024, IPC_CREAT|0600);
+	if (shmid < 0) {
+		perror("new shm error");
+		return -1;	
+	}
+  	/*
+  	struct epoll_event ev;
+  	struct epoll_event events[MAXEPOLLSIZE];
+  	struct rlimit rt;
+ 
+  	rt.rlim_max = rt.rlim_cur = MAXEPOLLSIZE;
+  	if (setrlimit(RLIMIT_NOFILE, &rt) == -1) {
+    		perror("setrlimit");
+    		exit(1);
+  	} else {
+    		printf("setting success /n");
+ 	}
+	*/
     	sockfd = socket(AF_INET, SOCK_DGRAM, 0); 
     	if (sockfd < 0) { 
         	printf("socket creation failed...\n"); 
@@ -56,7 +109,11 @@ main()
     	} else {
         	printf("Socket successfully created..\n"); 
 	}
-
+ /*
+	int opt=SO_REUSEADDR;
+  	setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt));
+*/
+	setnonblocking(sockfd);
     	memset(&servaddr, 0, sizeof(servaddr)); 
 	memset(&cli, 0, sizeof(cli)); 
   
@@ -70,10 +127,62 @@ main()
     	} else {
         	printf("Socket successfully binded..\n"); 
 	}
-	pid_t pid[PIDNUMB];
+/*create epoll
+  	kdpfd = epoll_create(MAXEPOLLSIZE);
+  	len = sizeof(struct sockaddr_in);
+ 	ev.events = EPOLLIN | EPOLLET;
+  	ev.data.fd = sockfd;
+  	if (epoll_ctl(kdpfd, EPOLL_CTL_ADD, sockfd, &ev) < 0) {
+    		fprintf(stderr, "epoll set insertion error: fd=%d/n", sockfd);
+    		return -1;
+  	} else {
+    		printf("listen socket added in  epoll success /n");
+  	}
+/*wait*/
+	int len, byte_read; 
+    	struct sockaddr_in cli; 	
+	len = sizeof(cli);
 	/*init ekf here*/
 	ekf_init(&ekf, Nsta, Mobs);
 	init(&ekf);
+	int   pid_port[PIDNUMB];
+	pid_t pid[PIDNUMB]; 
+	char   data_line[16][MAX];
+	while (1) {
+/*
+    		nfds = epoll_wait(kdpfd, events, 10000, -1);
+    		if (nfds == -1) {
+      			perror("epoll_wait");
+      			break;
+   		}
+    		for (i = 0; i < nfds; i++) {
+      			if (events[i].data.fd == sockfd) {
+				        client = accept(sockfd, (struct sockaddr *) &servaddr, &len);
+        				if (client < 0){
+            					perror("accept");
+            					continue;
+       					}
+*/	
+		recvfrom(sockfd, data_line, sizeof(data_line), 0, (SA *)&cli, &len);
+		if (pid_port[cli.sin_port] == 0) {
+			pid[cli.sin_port] = fork();
+			if (pid[cli.sin_port] == 0) { 
+				pid_port[cli.sin_port] = 1;
+				shmaddr = (int *)shmat(shmid, NULL, 0);
+			        if ((int)shmaddr == -1) {
+					perror("shmat error");
+					return -1;				
+				}
+				handle_data();
+				/*TODO create a queue*/	
+			}
+		} 
+		/*TODO*/
+		/*add to data_line to queue*/
+		
+	/*init ekf here
+	ekf_init(&ekf, Nsta, Mobs);
+	init(&ekf);/*
 	char buff[MAX];
 	int  i_cli = 0, new_port;
 	int  byte_read;
@@ -123,7 +232,7 @@ main()
 					exit(0); 
 	    			} else {
 					printf("Socket successfully binded for client #%d\n", i_cli); 
-				}*/
+				}
 	    			if ((bind(childfd, (SA*)&childsaddr, sizeof(childsaddr))) < 0) { 
 					printf("socket bind failed...\n"); 
 					exit(0); 
@@ -134,7 +243,7 @@ main()
 				handle_connect(childfd);
 			}	
 		}
-	}
+	}*/
 	close(sockfd);	
 	return 0;
 } 
