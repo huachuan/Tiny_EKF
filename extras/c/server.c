@@ -93,6 +93,7 @@ main(int argc, char *argv[]) {
 						perror("pipe error");
 						exit(1);
 					}
+					setnonblocking(fd[pid][1]);
 				        addfd(epfd, fd[pid * 2][0]); //listen to child
     					if(pid < 0) { 
 						perror("fork error"); 
