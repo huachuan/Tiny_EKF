@@ -29,7 +29,7 @@ main()
 	memset(&servaddr, 0, sizeof(servaddr)); 
 
 	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);//inet_addr("127.0.0.1"); 
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(PORT); 
 	setnonblocking(sockfd);
 	char   data_line[16][MAX]; 
@@ -46,8 +46,7 @@ main()
 		recvfrom(sockfd, pos_line, sizeof(pos_line), 0, (SA*) &servaddr, &len); 
 		printf("From Server received position\n");
 		for (i = 0; i < 3; i++) {
-			pos[i] = atof(pos_line[i]);
-			//printf("%f,", pos[i]);			
+			pos[i] = atof(pos_line[i]);			
 		}
 		printf("\n");
 		itr++;
