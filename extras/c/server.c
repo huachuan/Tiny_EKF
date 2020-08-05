@@ -44,11 +44,9 @@ main(int argc, char *argv[]) {
 	
         socklen_t cliLen = sizeof(clientAddr); 
 	// map key : port, value: pid
-    	//map<int, int> port_pid; 
 	int port_pid[MAXPORT];
 	// map key : fd, value: port
-	int fd_port[MAXPORT];
-	//map<int, int> fd_port; 
+	int fd_port[MAXPORT]; 
 	pid_t pid[PIDNUMB];
 
     	int listener = socket(AF_INET, SOCK_DGRAM, 0);
@@ -74,18 +72,17 @@ main(int argc, char *argv[]) {
     	static struct epoll_event events[PIDNUMB * 2 + 1];
     	//sock add to epfd list
     	addfd(epfd, listener);
-    	//main loop
    	while(1) {
 		int i;
 		int count = epoll_wait(epfd, events, PIDNUMB * 2, EPOLL_SIZE);
 		printf("num of events %d\n", count);
 		for (i = 0; i < count; ++i) {
-			//printf("events[i].data.fd %d listener %d", events[i].data.fd, listener);
+			
 			if (events[i].data.fd == listener) {
 				recvfrom(listener, data_line, sizeof(data_line), 0, ( struct sockaddr* )&clientAddr, &cliLen);
 				int c_port = clientAddr.sin_port;  
 				printf("client port %d \n", c_port);
-				//if (!port_pid.count(c_port)) { //new client
+				
 				if (port_pid[c_port] == 0) { //new client
 					int pid = fork();
 
@@ -93,7 +90,7 @@ main(int argc, char *argv[]) {
 						perror("pipe error");
 						exit(1);
 					}
-					setnonblocking(fd[pid][1]);
+					setnonblocking(fd[pid][1]); //set nonblocking pipe
 				        addfd(epfd, fd[pid * 2][0]); //listen to child
     					if(pid < 0) { 
 						perror("fork error"); 
@@ -104,19 +101,16 @@ main(int argc, char *argv[]) {
 					} else { //parent
 						port_pid[c_port] = pid;
 						fd_port[fd[pid * 2][0]] = c_port;
-						//port_pid.insert(pair<int, int>(c_port, pid));
-						//fd_port.insert(pair<int, int>(fd[pid * 2][0], c_port));
+					
 						write(fd[pid][1], data_line, sizeof(data_line));
 					}	
 				} else {
-					//int pid = port_pid.find(clientAddr.sin_port)->second;
 					int pid = port_pid[clientAddr.sin_port];
 					write(fd[pid][1], data_line, sizeof(data_line));
 				
 				}
 			} else if (events[i].events & EPOLLIN) {
 				int outfd = events[i].data.fd;
-				//int port = fd_port.find(outfd)->second;
 				int port = fd_port[outfd];
 				read(outfd, sout, sizeof(sout));
 				clientAddr.sin_port = port;
