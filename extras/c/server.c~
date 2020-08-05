@@ -1,36 +1,23 @@
-#include <stdio.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <sys/socket.h> 
-#include <sys/types.h>  
-#include <arpa/inet.h>
-#include <netinet/in.h> 
-#include <unistd.h> 
+#include "epoll_helper.h"
 #include "tinyekf_config.h"
-#define MAX  32
-#define BACKLOG 5
-#define PORT 8080
-#define PIDNUMB 80
-#define SA struct sockaddr   
+
 static double data_input[16];
+static int fd[MAXPORT * 2][2]; //fd[0] read, fd[1] write
 static ekf_t ekf;
 extern void init(ekf_t * ekf);
 extern double * ekf_fn(ekf_t * ekf, double data_input[16]);
 extern void ekf_init(ekf_t * ekf, int n, int m);
 
-void
-handle_connect(int sockfd)
+int
+handle_ekf(int infd, int outfd)
 {
-	int len, byte_read; 
-    	struct sockaddr_in cli; 	
-	len = sizeof(cli); 
+
 	char   data_line[16][MAX];
 	double * pos;
 	char   sout[3][MAX];
 	while (1) { 
 		int i;
-		byte_read = 0;
-        	byte_read = recvfrom(sockfd, data_line, sizeof(data_line), 0, (SA *)&cli, &len); 
+        	read(infd, data_line, sizeof(data_line)); 
 		for (i = 0; i < 16; i++) {
 			data_input[i] = atof(data_line[i]);			
 		}
@@ -38,104 +25,106 @@ handle_connect(int sockfd)
 		for (i = 0; i < 3; i++) {
 			sprintf(sout[i],"%f", pos[i]);
 		} 
-		sendto(sockfd, sout, sizeof(sout), 0, (SA *)&cli, len);	
-		printf("sockfd %d client port %d and pid %d", sockfd, cli.sin_port, getpid());	
-		printf("\n\n");
+		write(outfd, sout, sizeof(sout));	
     	}
-	close(sockfd);
-}
-int 
-main() 
-{ 
-	int sockfd, len; 
-	struct sockaddr_in servaddr, cli; 
-    	sockfd = socket(AF_INET, SOCK_DGRAM, 0); 
-    	if (sockfd < 0) { 
-        	printf("socket creation failed...\n"); 
-        	exit(0); 
-    	} else {
-        	printf("Socket successfully created..\n"); 
-	}
-
-    	memset(&servaddr, 0, sizeof(servaddr)); 
-	memset(&cli, 0, sizeof(cli)); 
-  
-    	servaddr.sin_family = AF_INET; 
-    	servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
-    	servaddr.sin_port = htons(PORT); 
-        
-    	if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) < 0) { 
-        	printf("socket bind failed...\n"); 
-        	exit(0); 
-    	} else {
-        	printf("Socket successfully binded..\n"); 
-	}
-	pid_t pid[PIDNUMB];
-	/*init ekf here*/
-	ekf_init(&ekf, Nsta, Mobs);
-	init(&ekf);
-	char buff[MAX];
-	int  i_cli = 0, new_port;
-	int  byte_read;
-	len = sizeof(cli);
-	while(1) {
-		printf("UDP server: waiting for connection\n");
-		bzero(buff, MAX);
-		byte_read = recvfrom(sockfd, (char *)buff, MAX, MSG_WAITALL, (SA *)&cli, &len);
-		buff[byte_read] = '\0';
-		printf("%s \n", buff);
-		if (byte_read > 0) {
-			i_cli++;
-			new_port = PORT + i_cli;
-			printf("received new, assign a port to client\n");
-			bzero(buff, MAX);
-			sprintf(buff, "%d", new_port);
-			printf("port number %s\n", buff);
-			sendto(sockfd, (char *)buff, sizeof(buff), 0, (SA *)&cli, len);
-			struct sockaddr_in childsaddr; 
-			int childfd = socket(AF_INET, SOCK_DGRAM, 0); 
-	    		if (childfd < 0) { 
-				printf("child socket creation failed...\n"); 
-				exit(0); 
-	    		} else {
-				printf("child socket successfully created..\n"); 
-			}
-			memset(&childsaddr, 0, sizeof(childsaddr)); 
-	    		childsaddr.sin_family = AF_INET; 
-	    		childsaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
-	    		childsaddr.sin_port = htons(new_port); 
-			pid[i_cli] = fork();
-			if (pid[i_cli] == 0) { /*
-				struct sockaddr_in childsaddr; 
-				int childfd = socket(AF_INET, SOCK_DGRAM, 0); 
-	    			if (childfd < 0) { 
-					printf("child socket creation failed...\n"); 
-					exit(0); 
-	    			} else {
-					printf("child socket successfully created..\n"); 
-				}
-				memset(&childsaddr, 0, sizeof(childsaddr)); 
-	    			childsaddr.sin_family = AF_INET; 
-	    			childsaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
-	    			childsaddr.sin_port = htons(new_port); 
-	    			if ((bind(childfd, (SA*)&childsaddr, sizeof(childsaddr))) < 0) { 
-					printf("socket bind failed...\n"); 
-					exit(0); 
-	    			} else {
-					printf("Socket successfully binded for client #%d\n", i_cli); 
-				}*/
-	    			if ((bind(childfd, (SA*)&childsaddr, sizeof(childsaddr))) < 0) { 
-					printf("socket bind failed...\n"); 
-					exit(0); 
-	    			} else {
-					printf("Socket successfully binded for client #%d\n", i_cli); 
-				}
-				printf("UDP server: receive use new port\n");
-				handle_connect(childfd);
-			}	
-		}
-	}
-	close(sockfd);	
+	close(infd);
+	close(outfd);
 	return 0;
-} 
+}
 
+int 
+main(int argc, char *argv[]) {
+
+	char   data_line[16][MAX];
+	char   sout[3][MAX];
+	struct sockaddr_in serverAddr, clientAddr;
+    	serverAddr.sin_family = PF_INET;
+    	serverAddr.sin_port = htons(SERVER_PORT);
+    	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	
+        socklen_t cliLen = sizeof(clientAddr); 
+	// map key : port, value: pid
+    	//map<int, int> port_pid; 
+	int port_pid[MAXPORT];
+	// map key : fd, value: port
+	int fd_port[MAXPORT];
+	//map<int, int> fd_port; 
+	pid_t pid[PIDNUMB];
+
+    	int listener = socket(AF_INET, SOCK_DGRAM, 0);
+
+    	if(listener < 0) {
+		perror("listener"); 
+		exit(-1);
+	}
+	printf("listen socket created \n");
+    
+    	if(bind(listener, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
+        	perror("bind error");
+        	exit(-1);
+    	}
+
+	//create epoll
+    	int epfd = epoll_create(EPOLL_SIZE);
+    	if(epfd < 0) { 
+		perror("epfd error");
+		exit(-1);
+	}
+   	printf("epoll created, epollfd = %d\n", epfd);
+    	static struct epoll_event events[PIDNUMB * 2 + 1];
+    	//sock add to epfd list
+    	addfd(epfd, listener);
+    	//main loop
+   	while(1) {
+		int i;
+		int count = epoll_wait(epfd, events, PIDNUMB * 2, EPOLL_SIZE);
+		printf("num of events %d\n", count);
+		for (i = 0; i < count; ++i) {
+			//printf("events[i].data.fd %d listener %d", events[i].data.fd, listener);
+			if (events[i].data.fd == listener) {
+				recvfrom(listener, data_line, sizeof(data_line), 0, ( struct sockaddr* )&clientAddr, &cliLen);
+				int c_port = clientAddr.sin_port;  
+				printf("client port %d \n", c_port);
+				//if (!port_pid.count(c_port)) { //new client
+				if (port_pid[c_port] == 0) { //new client
+					int pid = fork();
+
+					if (pipe(fd[pid]) < 0 || pipe(fd[pid * 2]) < 0) {
+						perror("pipe error");
+						exit(1);
+					}
+				        addfd(epfd, fd[pid * 2][0]); //listen to child
+    					if(pid < 0) { 
+						perror("fork error"); 
+						exit(-1); 
+					} else if (pid == 0) { // child
+						printf("child process\n");
+						handle_ekf(fd[pid][0], fd[pid * 2][1]);
+					} else { //parent
+						port_pid[c_port] = pid;
+						fd_port[fd[pid * 2][0]] = c_port;
+						//port_pid.insert(pair<int, int>(c_port, pid));
+						//fd_port.insert(pair<int, int>(fd[pid * 2][0], c_port));
+						write(fd[pid][1], data_line, sizeof(data_line));
+					}	
+				} else {
+					//int pid = port_pid.find(clientAddr.sin_port)->second;
+					int pid = port_pid[clientAddr.sin_port];
+					write(fd[pid][1], data_line, sizeof(data_line));
+				
+				}
+			} else if (events[i].events & EPOLLIN) {
+				int outfd = events[i].data.fd;
+				//int port = fd_port.find(outfd)->second;
+				int port = fd_port[outfd];
+				read(outfd, sout, sizeof(sout));
+				clientAddr.sin_port = port;
+				printf("sent to client");
+				sendto(listener, sout, sizeof(sout), 0, ( struct sockaddr* )&clientAddr, &cliLen);
+			}
+		}
+       	}
+    	close(listener); //close socket
+    	close(epfd); 
+    	return 0;
+}
