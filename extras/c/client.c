@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h> 
 #include <gpsdata.h>
+#include "epoll_helper.h"
 #define MAX  32
 #define PORT 8888 
 #define SA struct sockaddr 
@@ -30,7 +31,7 @@ main()
 	servaddr.sin_family = AF_INET; 
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);//inet_addr("127.0.0.1"); 
 	servaddr.sin_port = htons(PORT); 
-
+	setnonblocking(sockfd);
 	char   data_line[16][MAX]; 
 	char   pos_line[3][MAX]; //x,y,z
 	while (1) { 
@@ -42,12 +43,12 @@ main()
 		sendto(sockfd, data_line, sizeof(data_line), 0, (SA*) &servaddr, sizeof(servaddr)); 
 		int len;
 		len = sizeof(servaddr);
-		//recvfrom(sockfd, pos_line, sizeof(pos_line), 0, (SA*) &servaddr, &len); 
-		/*printf("From Server received position\n");
+		recvfrom(sockfd, pos_line, sizeof(pos_line), 0, (SA*) &servaddr, &len); 
+		printf("From Server received position\n");
 		for (i = 0; i < 3; i++) {
 			pos[i] = atof(pos_line[i]);
-			printf("%f,", pos[i]);			
-		}*/
+			//printf("%f,", pos[i]);			
+		}
 		printf("\n");
 		itr++;
 	} 
