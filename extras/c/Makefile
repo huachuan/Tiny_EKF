@@ -13,7 +13,7 @@ runc: client
 	./client
 
 server: server.c $(SRC)/tiny_ekf.c $(SRC)/tiny_ekf.h
-	gcc -Wall -I. -I$(SRC) -o server server.c gps_ekf.c $(SRC)/tiny_ekf.c -lm
+	g++ -Wall -I. -I$(SRC) -o server server.cpp gps_ekf.c $(SRC)/tiny_ekf.c -lm
 client: client.c gpsdata.h
 	gcc -Wall -I. client.c -o client
 

@@ -1,6 +1,10 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <map>
 #include "epoll_helper.h"
 #include "tinyekf_config.h"
 
+using namespace std;
 static double data_input[16];
 static int fd[MAXPORT * 2][2]; //fd[0] read, fd[1] write
 static ekf_t ekf;
@@ -44,10 +48,9 @@ main(int argc, char *argv[]) {
 	
         socklen_t cliLen = sizeof(clientAddr); 
 	// map key : port, value: pid
-	int port_pid[MAXPORT];
+	map<long, int> port_pid;
 	// map key : fd, value: port
-	int fd_port[MAXPORT]; 
-	pid_t pid[PIDNUMB];
+	map<int, long> fd_port;
 
     	int listener = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -55,7 +58,6 @@ main(int argc, char *argv[]) {
 		perror("listener"); 
 		exit(-1);
 	}
-	printf("listen socket created \n");
     
     	if(bind(listener, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
         	perror("bind error");
@@ -68,22 +70,21 @@ main(int argc, char *argv[]) {
 		perror("epfd error");
 		exit(-1);
 	}
-   	printf("epoll created, epollfd = %d\n", epfd);
+   	/*printf("epoll created, epollfd = %d\n", epfd);*/
     	static struct epoll_event events[PIDNUMB * 2 + 1];
     	//sock add to epfd list
     	addfd(epfd, listener);
    	while(1) {
 		int i;
 		int count = epoll_wait(epfd, events, PIDNUMB * 2, EPOLL_SIZE);
-		printf("num of events %d\n", count);
+		/*printf("num of events %d\n", count);*/
 		for (i = 0; i < count; ++i) {
-			
 			if (events[i].data.fd == listener) {
 				recvfrom(listener, data_line, sizeof(data_line), 0, ( struct sockaddr* )&clientAddr, &cliLen);
 				int c_port = clientAddr.sin_port;  
-				printf("client port %d \n", c_port);
-				
-				if (port_pid[c_port] == 0) { //new client
+				long iport = clientAddr.sin_addr.s_addr * 1000000 + c_port;
+				/*printf("client port%d %lu \n", c_port, iport);*/
+				if (!port_pid.count(iport)) { //new client
 					int pid = fork();
 
 					if (pipe(fd[pid]) < 0 || pipe(fd[pid * 2]) < 0) {
@@ -96,26 +97,29 @@ main(int argc, char *argv[]) {
 						perror("fork error"); 
 						exit(-1); 
 					} else if (pid == 0) { // child
-						printf("child process\n");
 						handle_ekf(fd[pid][0], fd[pid * 2][1]);
 					} else { //parent
-						port_pid[c_port] = pid;
-						fd_port[fd[pid * 2][0]] = c_port;
+						port_pid[iport] = pid;
+						fd_port[fd[pid * 2][0]] = iport;
 					
 						write(fd[pid][1], data_line, sizeof(data_line));
 					}	
 				} else {
-					int pid = port_pid[clientAddr.sin_port];
+					int pid = port_pid.find(iport)->second;
 					write(fd[pid][1], data_line, sizeof(data_line));
 				
 				}
 			} else if (events[i].events & EPOLLIN) {
 				int outfd = events[i].data.fd;
-				int port = fd_port[outfd];
 				read(outfd, sout, sizeof(sout));
-				clientAddr.sin_port = port;
-				printf("sent to client\n");
-				sendto(listener, sout, sizeof(sout), 0, ( struct sockaddr* )&clientAddr, &cliLen);
+				long ipp = fd_port.find(outfd)->second;
+				int ip, port; 
+				ip = ipp / 1000000;
+				port = ipp % 1000000;	
+				clientAddr.sin_addr.s_addr = ip;
+				clientAddr.sin_port = htons(port);
+				/*printf("sent to client\n");*/
+				sendto(listener, sout, sizeof(sout), 0, ( struct sockaddr* )&clientAddr, cliLen);
 			}
 		}
        	}

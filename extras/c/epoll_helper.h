@@ -1,7 +1,6 @@
 #ifndef EPOLL_HELPER_H_INCLUDED
 #define EPOLL_HELPER_H_INCLUDED
  
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -10,9 +9,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
  
 /**********************   macro defintion **************************/
 // server ip
